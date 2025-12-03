@@ -1,13 +1,10 @@
-FROM node:18
+FROM mcr.microsoft.com/playwright:v1.41.2-focal
 
 WORKDIR /app
 
-COPY package*.json ./
-
+COPY package.json package-lock.json* ./
 RUN npm install
 
 COPY . .
 
-EXPOSE 3000
-
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
