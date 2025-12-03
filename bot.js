@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const fs = require('fs');
 const notifyTelegram = require('./notify');
 const config = require('./config');
 const selectors = require('./selectors');
@@ -13,7 +14,13 @@ async function checkMessages() {
 
   const page = await browser.newPage();
 
-  // ↓ Anti-detecção
+  // 🔒 Anti-detecção + User-Agent real
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.setExtraHTTPHeaders({
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  });
+
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "webdriver", { get: () => false });
   });
@@ -21,32 +28,43 @@ async function checkMessages() {
   // ----------------------------------------------------
   // LOGIN
   // ----------------------------------------------------
-  await page.goto('https://www.99freelas.com.br/login', {
-    waitUntil: 'domcontentloaded'
+  await page.goto("https://www.99freelas.com.br/login", {
+    waitUntil: "domcontentloaded"
   });
 
-  // Espera os inputs aparecerem
-  await page.waitForSelector('input[type="email"]', { timeout: 15000 });
-  await page.waitForSelector('input[type="password"]', { timeout: 15000 });
+  // Esperar inputs com fallback
+  try {
+    await page.waitForSelector('input[type="email"]', { timeout: 10000 });
+    await page.waitForSelector('input[type="password"]', { timeout: 10000 });
+  } catch (err) {
+    console.log("⚠️ Inputs não apareceram, salvando DOM...");
 
-  // Preenche com seletores mais seguros
+    const html = await page.content();
+    fs.writeFileSync("render-dom.html", html);
+
+    console.log("📄 DOM salvo no arquivo render-dom.html");
+    console.log("🔗 URL atual:", page.url());
+    await browser.close();
+    return; // para o bot aqui até corrigirmos o seletor
+  }
+
+  // Preenchendo login
   await page.fill('input[type="email"]', config.email);
   await page.fill('input[type="password"]', config.password);
-
-  // Clica em "Entrar"
   await page.click('button[type="submit"]');
 
-  // Espera o dashboard carregar (ou redirecionar)
-  await page.waitForLoadState('networkidle');
+  // Espera redirect
+  await page.waitForLoadState("networkidle");
+
+  console.log("🔗 Após login, URL:", page.url());
 
   // ----------------------------------------------------
-  // IR PARA MENSAGENS
+  // MENSAGENS
   // ----------------------------------------------------
-  await page.goto('https://www.99freelas.com.br/messages', {
-    waitUntil: 'networkidle'
+  await page.goto("https://www.99freelas.com.br/messages", {
+    waitUntil: "networkidle"
   });
 
-  // Verificar não lidas
   const unread = await page.locator(selectors.unreadSelector).count();
 
   if (unread > 0) {
@@ -54,7 +72,7 @@ async function checkMessages() {
     console.log(text);
     await notifyTelegram(text);
   } else {
-    console.log('😴 Nada novo.');
+    console.log("😴 Nada novo.");
   }
 
   await browser.close();
