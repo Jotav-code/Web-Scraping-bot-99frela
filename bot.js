@@ -20,8 +20,10 @@ async function checkMessages() {
 
   // Ir direto para mensagens
   await page.goto("https://www.99freelas.com.br/messages", {
-    waitUntil: "networkidle"
-  });
+  waitUntil: "domcontentloaded",
+  timeout: 60000
+});
+
 
   console.log("🔗 URL atual:", page.url());
 
@@ -46,3 +48,4 @@ async function checkMessages() {
 }
 
 module.exports = checkMessages;
+
